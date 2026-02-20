@@ -1,6 +1,6 @@
 from flask import Flask, request, render_template
 import pickle
-from feature_engineering import extract_features
+from .feature_engineering import extract_features
 import tldextract
 from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime, timedelta
