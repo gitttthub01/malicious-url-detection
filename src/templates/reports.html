@@ -1,0 +1,17 @@
+<h2>Threat Reports</h2>
+<table border="1" cellpadding="10">
+<tr>
+<th>URL</th>
+<th>Result</th>
+<th>Confidence</th>
+<th>Time</th>
+</tr>
+{% for scan in scans %}
+<tr>
+<td>{{ scan.url }}</td>
+<td>{{ scan.result }}</td>
+<td>{{ (scan.confidence * 100)|round(2) }}%</td>
+<td>{{ scan.timestamp }}</td>
+</tr>
+{% endfor %}
+</table>

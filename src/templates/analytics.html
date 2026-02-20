@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>CyberShield Analytics</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <style>
+        body {
+            margin: 0;
+            font-family: 'Segoe UI', sans-serif;
+            background: #f8fafc;
+        }
+
+        .container {
+            padding: 40px;
+            max-width: 1200px;
+            margin: auto;
+        }
+
+        h1 {
+            margin-bottom: 30px;
+        }
+
+        .kpi-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 20px;
+            margin-bottom: 40px;
+        }
+
+        .kpi-card {
+            background: white;
+            padding: 25px;
+            border-radius: 15px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.05);
+            transition: 0.3s ease;
+        }
+
+        .kpi-card:hover {
+            transform: translateY(-5px);
+        }
+
+        .kpi-title {
+            color: #64748b;
+            font-size: 14px;
+        }
+
+        .kpi-value {
+            font-size: 28px;
+            font-weight: bold;
+            margin-top: 10px;
+        }
+
+        .charts-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+        }
+
+        .chart-card {
+            background: white;
+            padding: 25px;
+            border-radius: 15px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.05);
+        }
+
+        @media(max-width: 900px) {
+            .charts-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+<div class="container">
+    <h1>📊 Security Analytics Dashboard</h1>
+
+    <!-- KPI CARDS -->
+    <div class="kpi-grid">
+        <div class="kpi-card">
+            <div class="kpi-title">Total Scans</div>
+            <div class="kpi-value">{{ total }}</div>
+        </div>
+
+        <div class="kpi-card">
+            <div class="kpi-title">Safe URLs</div>
+            <div class="kpi-value">{{ safe }}</div>
+        </div>
+
+        <div class="kpi-card">
+            <div class="kpi-title">Malicious URLs</div>
+            <div class="kpi-value">{{ malicious }}</div>
+        </div>
+
+        <div class="kpi-card">
+            <div class="kpi-title">Detection Rate</div>
+            <div class="kpi-value">{{ detection_rate }}%</div>
+        </div>
+    </div>
+
+    <!-- CHARTS -->
+    <div class="charts-grid">
+
+        <div class="chart-card">
+            <h3>Safe vs Malicious</h3>
+            <canvas id="pieChart"></canvas>
+        </div>
+
+        <div class="chart-card">
+            <h3>Scan Trend (Last 7 Days)</h3>
+            <canvas id="lineChart"></canvas>
+        </div>
+
+    </div>
+</div>
+
+<script>
+const pieCtx = document.getElementById('pieChart');
+
+new Chart(pieCtx, {
+    type: 'doughnut',
+    data: {
+        labels: ['Safe', 'Malicious'],
+        datasets: [{
+            data: [{{ safe }}, {{ malicious }}],
+            backgroundColor: ['#22c55e', '#ef4444'],
+            borderWidth: 0
+        }]
+    },
+    options: {
+        responsive: true,
+        plugins: {
+            legend: {
+                position: 'bottom'
+            }
+        }
+    }
+});
+
+const lineCtx = document.getElementById('lineChart');
+
+new Chart(lineCtx, {
+    type: 'line',
+    data: {
+        labels: {{ dates|safe }},
+        datasets: [{
+            label: 'Scans',
+            data: {{ counts|safe }},
+            borderColor: '#3b82f6',
+            fill: false,
+            tension: 0.3
+        }]
+    },
+    options: {
+        responsive: true,
+        scales: {
+            y: {
+                beginAtZero: true
+            }
+        }
+    }
+});
+</script>
+
+</body>
+</html>

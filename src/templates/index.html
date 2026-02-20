@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>CyberShield - AI URL Security</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <style>
+        body {
+            margin: 0;
+            font-family: 'Segoe UI', sans-serif;
+            background: linear-gradient(135deg, #e0f2fe, #f8fafc);
+            overflow-x: hidden;
+        }
+
+        /* Animated Background */
+        body::before {
+            content: "";
+            position: fixed;
+            width: 100%;
+            height: 100%;
+            background-image: radial-gradient(#93c5fd 1px, transparent 1px);
+            background-size: 40px 40px;
+            animation: moveBg 40s linear infinite;
+            opacity: 0.15;
+            z-index: -1;
+        }
+
+        @keyframes moveBg {
+            from { background-position: 0 0; }
+            to { background-position: 1000px 1000px; }
+        }
+
+        /* Sidebar */
+        .sidebar {
+            position: fixed;
+            left: 0;
+            top: 0;
+            width: 220px;
+            height: 100%;
+            background: #1e3a8a;
+            color: white;
+            padding: 30px 20px;
+        }
+
+        .sidebar h2 { margin-bottom: 40px; }
+
+        .sidebar ul {
+            list-style: none;
+            padding: 0;
+        }
+
+        .sidebar li { margin: 18px 0; }
+
+        .sidebar a {
+            text-decoration: none;
+            color: white;
+            display: block;
+            padding: 10px 12px;
+            border-radius: 8px;
+            transition: 0.3s;
+        }
+
+        .sidebar a:hover {
+            background: rgba(255,255,255,0.15);
+            transform: translateX(5px);
+        }
+
+        /* Main */
+        .main {
+            margin-left: 240px;
+            padding: 60px 40px;
+        }
+
+        /* Hero Card */
+        .hero-card {
+            background: white;
+            padding: 50px;
+            border-radius: 25px;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.08);
+            max-width: 850px;
+            margin: auto;
+            text-align: center;
+        }
+
+        .shield {
+            font-size: 55px;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+            100% { transform: scale(1); }
+        }
+
+        input {
+            width: 80%;
+            padding: 14px;
+            border-radius: 12px;
+            border: 1px solid #ddd;
+            margin: 25px 0;
+        }
+
+        button {
+            padding: 14px 35px;
+            border-radius: 12px;
+            border: none;
+            background: #2563eb;
+            color: white;
+            font-weight: bold;
+            cursor: pointer;
+            transition: 0.3s;
+        }
+
+        button:hover {
+            background: #1e40af;
+            transform: translateY(-3px);
+        }
+
+        .result {
+            margin-top: 30px;
+            padding: 25px;
+            border-radius: 18px;
+        }
+
+        .safe {
+            background: #dcfce7;
+            border-left: 6px solid #16a34a;
+        }
+
+        .malicious {
+            background: #fee2e2;
+            border-left: 6px solid #dc2626;
+        }
+
+        /* Sections */
+        .section {
+            margin-top: 100px;
+        }
+
+        .section h2 {
+            text-align: center;
+            margin-bottom: 50px;
+        }
+
+        .three-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 30px;
+            max-width: 1000px;
+            margin: auto;
+        }
+
+        .feature-card {
+            background: white;
+            padding: 30px;
+            border-radius: 18px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.05);
+            transition: 0.3s;
+        }
+
+        .feature-card:hover {
+            transform: translateY(-5px);
+        }
+
+        /* Stats Strip */
+        .stats-strip {
+            margin-top: 100px;
+            background: #1e3a8a;
+            color: white;
+            padding: 60px 20px;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 40px;
+            max-width: 1000px;
+            margin: auto;
+            text-align: center;
+        }
+
+        .stat-number {
+            font-size: 32px;
+            font-weight: bold;
+        }
+
+        /* Footer */
+        footer {
+            margin-top: 100px;
+            padding: 40px;
+            text-align: center;
+            background: #f1f5f9;
+            color: #555;
+        }
+
+        /* Responsive */
+        @media(max-width:768px){
+            .sidebar { position: relative; width: 100%; height: auto; }
+            .main { margin-left: 0; }
+        }
+    </style>
+</head>
+
+<body>
+
+<div class="sidebar">
+    <h2>🛡 CyberShield</h2>
+    <ul>
+        <li><a href="/">Dashboard</a></li>
+        <li><a href="/">URL Scanner</a></li>
+        <li><a href="/reports">Threat Reports</a></li>
+        <li><a href="/analytics">Analytics</a></li>
+    </ul>
+</div>
+
+<div class="main">
+
+    <!-- HERO -->
+    <div class="hero-card">
+        <div class="shield">🛡</div>
+        <h1>AI-Powered Malicious URL Detection</h1>
+        <p>Real-time phishing and malware detection using machine learning.</p>
+
+        <form method="POST" action="/predict">
+            <input type="text" name="url" placeholder="Enter URL..." required>
+            <br>
+            <button type="submit">Analyze URL</button>
+        </form>
+
+        {% if result %}
+        <div class="result {{ status }}">
+            <h2>{{ result }}</h2>
+            <p><strong>Confidence:</strong> {{ (confidence * 100)|round(2) }}%</p>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- HOW IT WORKS -->
+    <div class="section">
+        <h2>How It Works</h2>
+        <div class="three-grid">
+            <div class="feature-card">
+                <h3>🔍 URL Feature Extraction</h3>
+                <p>Analyzes domain structure, special characters, subdomains, and suspicious patterns.</p>
+            </div>
+            <div class="feature-card">
+                <h3>🧠 Machine Learning Model</h3>
+                <p>Uses an optimized SVM classifier trained on malicious and benign URLs.</p>
+            </div>
+            <div class="feature-card">
+                <h3>🛡 Risk Assessment</h3>
+                <p>Generates a probability-based risk score to determine URL safety.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- STATS STRIP -->
+    <div class="stats-strip">
+        <div class="stats-grid">
+            <div>
+                <div class="stat-number">98%</div>
+                <div>Model Accuracy</div>
+            </div>
+            <div>
+                <div class="stat-number">Real-Time</div>
+                <div>Detection Speed</div>
+            </div>
+            <div>
+                <div class="stat-number">AI Based</div>
+                <div>Threat Analysis</div>
+            </div>
+            <div>
+                <div class="stat-number">Secure</div>
+                <div>Privacy Focused</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- FEATURES -->
+    <div class="section">
+        <h2>Platform Capabilities</h2>
+        <div class="three-grid">
+            <div class="feature-card">
+                <h3>📊 Analytics Dashboard</h3>
+                <p>Visualize detection trends and monitor URL scan statistics.</p>
+            </div>
+            <div class="feature-card">
+                <h3>📂 Threat Reports</h3>
+                <p>Access detailed historical scans with timestamps and results.</p>
+            </div>
+            <div class="feature-card">
+                <h3>⚡ Intelligent Filtering</h3>
+                <p>Probability threshold control and trusted domain whitelisting.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- FOOTER -->
+    <footer>
+        © 2026 CyberShield | AI-Based URL Security Platform<br>
+        Built with Flask + SVM + SQLAlchemy
+    </footer>
+
+</div>
+
+</body>
+</html>
