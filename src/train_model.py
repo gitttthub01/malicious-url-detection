@@ -8,6 +8,7 @@ from feature_engineering import extract_features
 
 # Load dataset
 df = pd.read_csv("../dataset/url_dataset.csv")
+print("Total samples in dataset:", len(df))
 
 if 'Unnamed: 0' in df.columns:
     df = df.drop(columns=['Unnamed: 0'])

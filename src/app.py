@@ -5,13 +5,15 @@ import tldextract
 from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime, timedelta
 from collections import defaultdict
-
+import os
+import time
 
 app = Flask(__name__)
 
 # ======================================================
 # DATABASE CONFIGURATION
 # ======================================================
+
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///scans.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
@@ -20,8 +22,9 @@ db = SQLAlchemy(app)
 class Scan(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     url = db.Column(db.String(500))
-    result = db.Column(db.String(50))
+    result = db.Column(db.String(100))
     confidence = db.Column(db.Float)
+    latency = db.Column(db.Float)
     timestamp = db.Column(db.DateTime, default=datetime.utcnow)
 
 
@@ -29,22 +32,37 @@ with app.app_context():
     db.create_all()
 
 # ======================================================
-# LOAD TRAINED MODEL
+# LOAD XGBOOST MODEL
 # ======================================================
-import os
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 MODEL_PATH = os.path.join(BASE_DIR, "..", "models", "malicious_url_model.pkl")
 SCALER_PATH = os.path.join(BASE_DIR, "..", "models", "scaler.pkl")
 
-model = pickle.load(open(MODEL_PATH, "rb"))
-scaler = pickle.load(open(SCALER_PATH, "rb"))
+with open(MODEL_PATH, "rb") as f:
+    model = pickle.load(f)
 
+with open(SCALER_PATH, "rb") as f:
+    scaler = pickle.load(f)
+
+print("Loaded model type:", type(model))
+
+# ======================================================
+# TRUSTED DOMAINS
+# ======================================================
 
 trusted_domains = [
     "google.com", "facebook.com", "youtube.com",
     "microsoft.com", "amazon.com", "linkedin.com"
 ]
+
+# ======================================================
+# FAIL-SAFE CONFIGURATION
+# ======================================================
+
+LOWER_THRESHOLD = 0.45
+UPPER_THRESHOLD = 0.65
+MAX_ALLOWED_LATENCY = 1.0  # seconds
 
 # ======================================================
 # ROUTES
@@ -57,6 +75,7 @@ def home():
 
 @app.route('/predict', methods=['POST'])
 def predict():
+
     url = request.form['url'].strip().lower()
 
     if not url.startswith("http"):
@@ -72,34 +91,77 @@ def predict():
         "Top Level Domain": ext.suffix
     }
 
-    # -----------------------
-    # Prediction Logic
-    # -----------------------
+    # ==================================================
+    # WHITELIST CHECK
+    # ==================================================
+
     if domain_only in trusted_domains:
         result = "Safe URL (Trusted Domain)"
         confidence = 1.0
         status = "safe"
+        latency = 0.0
+
     else:
+        # ==================================================
+        # LATENCY MEASUREMENT
+        # ==================================================
+
+        start_time = time.time()
+
         features = extract_features(url)
         features_scaled = scaler.transform([features])
+
+        # XGBoost probability prediction
         prob_malicious = model.predict_proba(features_scaled)[0][1]
+
+        end_time = time.time()
+        latency = round(end_time - start_time, 4)
+
         print("Malicious Probability:", prob_malicious)
+        print("Latency:", latency)
 
+        # ==================================================
+        # LATENCY FAIL-SAFE
+        # ==================================================
 
-        threshold = 0.7
-        if prob_malicious > threshold:
-            result = "Malicious URL Detected"
-            confidence = prob_malicious
-            status = "malicious"
+        if latency > MAX_ALLOWED_LATENCY:
+            result = "⚠ System Busy - Please Try Again"
+            confidence = 0.0
+            status = "warning"
+
         else:
-            result = "Safe URL"
-            confidence = 1 - prob_malicious
-            status = "safe"
+            confidence_score = abs(prob_malicious - 0.5) * 2
 
-    # -----------------------
-    # Save Scan to Database
-    # -----------------------
-    new_scan = Scan(url=url, result=result, confidence=confidence)
+            # ==================================================
+            # PROBABILITY DECISION LOGIC
+            # ==================================================
+
+            if prob_malicious >= UPPER_THRESHOLD:
+                result = "Malicious URL Detected"
+                confidence = prob_malicious
+                status = "malicious"
+
+            elif prob_malicious <= LOWER_THRESHOLD:
+                result = "Safe URL"
+                confidence = 1 - prob_malicious
+                status = "safe"
+
+            else:
+                result = "⚠ Suspicious - Requires Further Verification"
+                confidence = confidence_score
+                status = "warning"
+
+    # ==================================================
+    # STORE RESULT
+    # ==================================================
+
+    new_scan = Scan(
+        url=url,
+        result=result,
+        confidence=confidence,
+        latency=latency
+    )
+
     db.session.add(new_scan)
     db.session.commit()
 
@@ -108,13 +170,15 @@ def predict():
         result=result,
         confidence=confidence,
         status=status,
-        domain_info=domain_info
+        domain_info=domain_info,
+        latency=latency
     )
 
 
 # ======================================================
-# REPORTS PAGE (Dynamic Table)
+# REPORTS
 # ======================================================
+
 @app.route('/reports')
 def reports():
     scans = Scan.query.order_by(Scan.timestamp.desc()).all()
@@ -122,8 +186,9 @@ def reports():
 
 
 # ======================================================
-# ANALYTICS DASHBOARD
+# ANALYTICS
 # ======================================================
+
 @app.route('/analytics')
 def analytics():
 
@@ -133,7 +198,6 @@ def analytics():
 
     detection_rate = round((malicious / total) * 100, 2) if total > 0 else 0
 
-    # ----------- Last 7 Days Trend -----------
     last_7_days = defaultdict(int)
 
     for i in range(7):
@@ -161,8 +225,9 @@ def analytics():
 
 
 # ======================================================
-# MAIN
+# RENDER ENTRYPOINT
 # ======================================================
-if __name__ == '__main__':
-      app.run(host="0.0.0.0", port=5000) 
 
+if __name__ == '__main__':
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port)
