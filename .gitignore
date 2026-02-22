@@ -1,0 +1,17 @@
+# Virtual Environment
+venv/
+__pycache__/
+*.pyc
+
+# Dataset
+dataset/
+*.csv
+*.txt
+
+# Generated files
+*.png
+*.log
+
+# System files
+.DS_Store
+Thumbs.db
