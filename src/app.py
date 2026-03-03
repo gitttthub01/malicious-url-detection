@@ -1,23 +1,35 @@
 from flask import Flask, request, render_template
 import pickle
-from .feature_engineering import extract_features
+from feature_engineering import extract_features
 import tldextract
 from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime, timedelta
 from collections import defaultdict
 import os
 import time
+import requests
+import base64
 
 app = Flask(__name__)
 
 # ======================================================
-# DATABASE CONFIGURATION
+# CONFIGURATION
 # ======================================================
 
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///scans.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
 
+VIRUSTOTAL_API_KEY = os.environ.get("VIRUSTOTAL_API_KEY")
+
+ALPHA = 0.7  # ML weight
+LOWER_THRESHOLD = 0.45
+UPPER_THRESHOLD = 0.65
+MAX_ALLOWED_LATENCY = 3.0  # allow API latency
+
+# ======================================================
+# DATABASE MODEL
+# ======================================================
 
 class Scan(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -27,26 +39,56 @@ class Scan(db.Model):
     latency = db.Column(db.Float)
     timestamp = db.Column(db.DateTime, default=datetime.utcnow)
 
-
 with app.app_context():
     db.create_all()
 
 # ======================================================
-# LOAD XGBOOST MODEL
+# LOAD MODEL (PIPELINE)
 # ======================================================
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-MODEL_PATH = os.path.join(BASE_DIR, "..", "models", "malicious_url_model.pkl")
-SCALER_PATH = os.path.join(BASE_DIR, "..", "models", "scaler.pkl")
+MODEL_PATH = os.path.abspath(
+    os.path.join(BASE_DIR, "..", "models", "malicious_url_model.pkl")
+)
+
+print("Loading model from:", MODEL_PATH)
 
 with open(MODEL_PATH, "rb") as f:
     model = pickle.load(f)
 
-with open(SCALER_PATH, "rb") as f:
-    scaler = pickle.load(f)
+print("Model loaded successfully.")
 
-print("Loaded model type:", type(model))
+# ======================================================
+# VIRUSTOTAL FUNCTION
+# ======================================================
 
+def get_virustotal_score(url):
+
+    if not VIRUSTOTAL_API_KEY:
+        return 0
+
+    try:
+        url_bytes = url.encode("utf-8")
+        url_id = base64.urlsafe_b64encode(url_bytes).decode().strip("=")
+
+        headers = {"x-apikey": VIRUSTOTAL_API_KEY}
+        vt_url = f"https://www.virustotal.com/api/v3/urls/{url_id}"
+
+        response = requests.get(vt_url, headers=headers, timeout=5)
+
+        if response.status_code == 200:
+            data = response.json()
+            stats = data["data"]["attributes"]["last_analysis_stats"]
+
+            malicious_votes = stats.get("malicious", 0)
+            total_votes = sum(stats.values())
+
+            return malicious_votes / total_votes if total_votes > 0 else 0
+
+        return 0
+
+    except Exception:
+        return 0
 # ======================================================
 # TRUSTED DOMAINS
 # ======================================================
@@ -55,14 +97,6 @@ trusted_domains = [
     "google.com", "facebook.com", "youtube.com",
     "microsoft.com", "amazon.com", "linkedin.com"
 ]
-
-# ======================================================
-# FAIL-SAFE CONFIGURATION
-# ======================================================
-
-LOWER_THRESHOLD = 0.45
-UPPER_THRESHOLD = 0.65
-MAX_ALLOWED_LATENCY = 1.0  # seconds
 
 # ======================================================
 # ROUTES
@@ -76,7 +110,14 @@ def home():
 @app.route('/predict', methods=['POST'])
 def predict():
 
-    url = request.form['url'].strip().lower()
+    url = request.form.get('url')
+
+    if not url:
+        return render_template("index.html",
+                               result="Invalid Input",
+                               status="warning")
+
+    url = url.strip().lower()
 
     if not url.startswith("http"):
         url = "https://" + url
@@ -102,57 +143,45 @@ def predict():
         latency = 0.0
 
     else:
-        # ==================================================
-        # LATENCY MEASUREMENT
-        # ==================================================
-
         start_time = time.time()
 
+        # ML Prediction
         features = extract_features(url)
-        features_scaled = scaler.transform([features])
+        ml_prob = model.predict_proba([features])[0][1]
 
-        # XGBoost probability prediction
-        prob_malicious = model.predict_proba(features_scaled)[0][1]
+        # VirusTotal Score
+        vt_score = get_virustotal_score(url)
 
-        end_time = time.time()
-        latency = round(end_time - start_time, 4)
+        # Hybrid Score
+        hybrid_score = ALPHA * ml_prob + (1 - ALPHA) * vt_score
 
-        print("Malicious Probability:", prob_malicious)
-        print("Latency:", latency)
-
-        # ==================================================
-        # LATENCY FAIL-SAFE
-        # ==================================================
+        latency = round(time.time() - start_time, 4)
 
         if latency > MAX_ALLOWED_LATENCY:
-            result = "⚠ System Busy - Please Try Again"
+            result = "⚠ System Busy - Try Again"
             confidence = 0.0
             status = "warning"
 
         else:
-            confidence_score = abs(prob_malicious - 0.5) * 2
+            confidence = round(
+                hybrid_score if hybrid_score > 0.5 else 1 - hybrid_score,
+                4
+            )
 
-            # ==================================================
-            # PROBABILITY DECISION LOGIC
-            # ==================================================
-
-            if prob_malicious >= UPPER_THRESHOLD:
+            if hybrid_score >= UPPER_THRESHOLD:
                 result = "Malicious URL Detected"
-                confidence = prob_malicious
                 status = "malicious"
 
-            elif prob_malicious <= LOWER_THRESHOLD:
+            elif hybrid_score <= LOWER_THRESHOLD:
                 result = "Safe URL"
-                confidence = 1 - prob_malicious
                 status = "safe"
 
             else:
-                result = "⚠ Suspicious - Requires Further Verification"
-                confidence = confidence_score
+                result = "⚠ Suspicious - Requires Verification"
                 status = "warning"
 
     # ==================================================
-    # STORE RESULT
+    # SAVE TO DATABASE
     # ==================================================
 
     new_scan = Scan(
@@ -223,11 +252,13 @@ def analytics():
         counts=counts
     )
 
-
 # ======================================================
-# RENDER ENTRYPOINT
+# ENTRYPOINT (Render Compatible)
 # ======================================================
 
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
+
+    print("VirusTotal Key Loaded:", bool(VIRUSTOTAL_API_KEY))
+print("Key Length:", len(VIRUSTOTAL_API_KEY) if VIRUSTOTAL_API_KEY else 0)

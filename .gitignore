@@ -3,14 +3,26 @@ venv/
 __pycache__/
 *.pyc
 
-# Dataset
-dataset/
-*.csv
-*.txt
+# Database
+scans.db
+src/instance/
 
-# Generated files
-*.png
-*.log
+# Research outputs
+results/
+src/test_results/
+
+# Research utilities
+src/check_model.py
+src/test_api.py
+src/cross_dataset_evaluation.py
+src/deployment_simulation.py
+src/generate_table_images.py
+src/statistical_significance.py
+src/threat_intel_api.py
+src/vt_hybrid_evaluation.py
+
+# Environment
+.env
 
 # System files
 .DS_Store
